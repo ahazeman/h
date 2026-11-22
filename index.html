@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ms"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Megholoh Roomstay – Paparan 3D</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#15181c;font-family:system-ui,sans-serif;color:#eee}
+#c{position:fixed;inset:0}
+.lb{position:fixed;left:0;top:0;transform:translate(-50%,-50%);font-size:12px;padding:2px 6px;border-radius:4px;background:rgba(0,0,0,.7);white-space:nowrap;pointer-events:none}
+.lb.dim{color:#7fe3ff}.lb.fur{color:#ffd37a}.lb.door{color:#fff;background:rgba(120,70,20,.9);pointer-events:auto}
+.lb button{margin-left:6px;cursor:pointer;border:0;border-radius:4px;padding:2px 8px;background:#f5a623;font-weight:600}
+.lb.loc{color:#fff;background:#c0392b;font-weight:600;font-size:13px}
+#panel{position:fixed;right:12px;top:12px;width:250px;background:rgba(20,24,28,.94);border:1px solid #444;border-radius:10px;padding:12px;font-size:13px;z-index:5}
+#panel h3{margin:0 0 8px;font-size:14px;display:flex;justify-content:space-between}
+#panel label{display:flex;align-items:center;gap:8px;margin:6px 0}
+#panel button{cursor:pointer;border:0;border-radius:6px;padding:6px 10px;background:#f5a623;font-weight:600;margin:2px 2px 2px 0}
+#panel textarea{width:100%;height:150px;background:#0c0e10;color:#9f9;border:1px solid #444;font:11px monospace;box-sizing:border-box;display:none}
+#fab{position:fixed;right:12px;top:12px;z-index:4;display:none;border:0;border-radius:8px;padding:8px 12px;background:#f5a623;font-weight:700;cursor:pointer}
+#msg{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;z-index:6;background:rgba(0,0,0,.8);padding:18px;border-radius:10px}
+</style></head><body>
+<canvas id="c"></canvas><div id="msg">Memuatkan model…<br><small>Jika gagal, pilih fail .glb:</small><br><input type="file" id="file" accept=".glb"></div>
+<button id="fab">☰ Kawalan</button>
+<div id="panel"><h3><span>Kawalan</span><span id="x" style="cursor:pointer">✕</span></h3>
+<div id="doors"></div>
+<button id="all">Buka semua pintu</button><button id="none">Tutup semua</button><hr style="border-color:#444">
+<label><input type="checkbox" id="tRoom" checked> Label saiz bilik</label>
+<label><input type="checkbox" id="tFur" checked> Label saiz perabot</label>
+<label><input type="checkbox" id="tDoor" checked> Label pintu</label>
+<label><input type="checkbox" id="tLoc" checked> Penanda lokasi</label>
+<button id="ed">Edit JSON</button><button id="ap" style="display:none">Guna</button>
+<textarea id="js" spellcheck="false"></textarea>
+<small style="color:#999">Seret = putar · Roda = zum · Klik kanan = alih</small></div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+
+// ===== DATA JSON (boleh diedit melalui butang "Edit JSON") =====
+// Koordinat dalam meter, selepas model diluruskan dengan dinding (putaran 10°).
+let CFG={
+ "location":{"name":"Kampung Talang Dusun","note":"Tiada data GPS/lokasi dalam fail GLB; nama ini daripada permintaan anda","lat":null,"lng":null,"x":0,"z":0.2,"y":3.3},
+ "modelRotationDeg":10,
+ "room":{"x0":-2.37,"x1":2.45,"z0":-1.78,"z1":2.19,"floorY":0.1,"ceilY":2.92},
+ "doors":[
+  {"id":"d1","name":"Pintu Utama","x":-1.6,"z":2.19,"rotDeg":0,"w":0.9,"h":2.0,"openDeg":95},
+  {"id":"d2","name":"Pintu Belakang","x":1.0,"z":-1.78,"rotDeg":180,"w":0.8,"h":2.0,"openDeg":95}],
+ "furniture":[
+  {"name":"Katil (anggaran)","x":-1.14,"z":-0.34,"w":2.0,"d":1.5,"h":0.5},
+  {"name":"Perabot 2 (anggaran)","x":1.0,"z":0.2,"w":1.2,"d":0.6,"h":0.8}]
+};
+const GROUP={};let doors=[],labels=[];
+const cv=document.getElementById('c'),R=new THREE.WebGLRenderer({canvas:cv,antialias:true});
+R.setPixelRatio(devicePixelRatio);R.setSize(innerWidth,innerHeight);
+const S=new THREE.Scene();S.background=new THREE.Color(0x15181c);
+S.add(new THREE.AmbientLight(0xffffff,2.2));
+const cam=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.05,100);cam.position.set(0,5.5,6);
+const OC=new OrbitControls(cam,cv);OC.target.set(0,1.2,.2);OC.update();
+const ov=new THREE.Group();S.add(ov);
+const M=(c,o=1)=>new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:o,side:2});
+
+function lab(text,cls,pos,btn){const e=document.createElement('div');e.className='lb '+cls;e.textContent=text;
+ if(btn){const b=document.createElement('button');b.textContent=btn.t;b.onclick=btn.f;e.appendChild(b);e.btn=b}
+ document.body.appendChild(e);const o={e,pos:new THREE.Vector3(...pos),cls};labels.push(o);return o}
+function line(a,b,c=0x7fe3ff){const g=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...a),new THREE.Vector3(...b)]);ov.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:c})))}
+
+function build(){
+ ov.clear();labels.forEach(l=>l.e.remove());labels=[];doors=[];
+ const r=CFG.room,f=r.floorY,L=r.x1-r.x0,W=r.z1-r.z0,H=r.ceilY-r.floorY;
+ const o=0.15,fy=f+0.02;
+ line([r.x0,fy,r.z1+o],[r.x1,fy,r.z1+o]);line([r.x1+o,fy,r.z0],[r.x1+o,fy,r.z1]);line([r.x0-o,f,r.z0-o],[r.x0-o,r.ceilY,r.z0-o]);
+ lab(`Panjang ${L.toFixed(2)} m`,'dim room',[(r.x0+r.x1)/2,fy,r.z1+o]);
+ lab(`Lebar ${W.toFixed(2)} m`,'dim room',[r.x1+o,fy,(r.z0+r.z1)/2]);
+ lab(`Tinggi ${H.toFixed(2)} m`,'dim room',[r.x0-o,(f+r.ceilY)/2,r.z0-o]);
+ lab(`Luas lantai ≈ ${(L*W).toFixed(1)} m²`,'dim room',[(r.x0+r.x1)/2,fy,(r.z0+r.z1)/2]);
+ CFG.furniture.forEach(u=>{const g=new THREE.BoxGeometry(u.w,u.h,u.d);const m=new THREE.LineSegments(new THREE.EdgesGeometry(g),new THREE.LineBasicMaterial({color:0xffd37a}));
+  m.position.set(u.x,f+u.h/2,u.z);ov.add(m);m.userData.fur=1;
+  lab(`${u.name} ${u.w}×${u.d}×${u.h} m`,'fur',[u.x,f+u.h+.1,u.z])});
+ CFG.doors.forEach(d=>{const piv=new THREE.Group();piv.position.set(d.x,r.floorY,d.z);piv.rotation.y=THREE.MathUtils.degToRad(d.rotDeg);
+  const p=new THREE.Mesh(new THREE.BoxGeometry(d.w,d.h,.05),M(0x8b5a2b,.75));p.position.set(d.w/2,d.h/2,0);
+  const hinge=new THREE.Group();hinge.add(p);piv.add(hinge);ov.add(piv);
+  const st={d,hinge,cur:0,tgt:0,base:THREE.MathUtils.degToRad(d.rotDeg)};
+  const tog=()=>{st.tgt=st.tgt?0:THREE.MathUtils.degToRad(d.openDeg);sync()};
+  st.l=lab(`${d.name} ${d.w}×${d.h} m`,'door',[d.x+d.w/2*Math.cos(st.base),r.floorY+d.h+.15,d.z-d.w/2*Math.sin(st.base)],{t:'Buka',f:tog});
+  st.tog=tog;p.userData.tog=tog;doors.push(st)});
+ const lc=CFG.location;lab(`📍 ${lc.name}`+(lc.lat!=null?` (${lc.lat}, ${lc.lng})`:''),'loc',[lc.x,lc.y,lc.z]);
+ drawPanel();vis();
+}
+function sync(){doors.forEach(s=>{s.l.e.btn.textContent=s.tgt?'Tutup':'Buka'});drawPanel()}
+function drawPanel(){const el=document.getElementById('doors');el.innerHTML='';
+ doors.forEach(s=>{const b=document.createElement('button');b.textContent=`${s.tgt?'Tutup':'Buka'} ${s.d.name}`;b.onclick=s.tog;el.appendChild(b)})}
+function vis(){const on=id=>document.getElementById(id).checked;
+ labels.forEach(l=>{l.hide=(l.cls.includes('room')&&!on('tRoom'))||(l.cls==='fur'&&!on('tFur'))||(l.cls==='door'&&!on('tDoor'))||(l.cls==='loc lb'&&!on('tLoc'))||(l.cls==='loc'&&!on('tLoc'))})}
+['tRoom','tFur','tDoor','tLoc'].forEach(i=>document.getElementById(i).onchange=vis);
+document.getElementById('all').onclick=()=>{doors.forEach(s=>s.tgt=THREE.MathUtils.degToRad(s.d.openDeg));sync()};
+document.getElementById('none').onclick=()=>{doors.forEach(s=>s.tgt=0);sync()};
+const js=document.getElementById('js'),ap=document.getElementById('ap');
+document.getElementById('ed').onclick=()=>{js.value=JSON.stringify(CFG,null,1);js.style.display=ap.style.display='block'};
+ap.onclick=()=>{try{CFG=JSON.parse(js.value);build()}catch(e){alert('JSON tidak sah: '+e.message)}};
+const pn=document.getElementById('panel'),fab=document.getElementById('fab');
+document.getElementById('x').onclick=()=>{pn.style.display='none';fab.style.display='block'};
+fab.onclick=()=>{pn.style.display='block';fab.style.display='none'};
+
+const ray=new THREE.Raycaster(),mv=new THREE.Vector2();
+cv.addEventListener('dblclick',e=>{mv.set(e.clientX/innerWidth*2-1,-e.clientY/innerHeight*2+1);ray.setFromCamera(mv,cam);
+ const h=ray.intersectObjects(ov.children,true).find(i=>i.object.userData.tog);if(h)h.object.userData.tog()});
+
+let model;
+function load(src){new GLTFLoader().load(src,g=>{if(model)S.remove(model);model=g.scene;model.rotation.y=THREE.MathUtils.degToRad(CFG.modelRotationDeg);
+ model.traverse(n=>{if(n.isMesh&&n.material){n.material.side=2;n.material.metalness=0}});S.add(model);document.getElementById('msg').remove();build()},undefined,
+ ()=>{document.getElementById('msg').innerHTML='Tidak dapat memuat fail secara automatik.<br>Pilih fail .glb:<br><input type="file" id="file2" accept=".glb">';bind('file2')})}
+function bind(id){document.getElementById(id).onchange=e=>load(URL.createObjectURL(e.target.files[0]))}
+bind('file');load('megholoh_roomstay.glb');
+addEventListener('resize',()=>{R.setSize(innerWidth,innerHeight);cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix()});
+const v=new THREE.Vector3();
+R.setAnimationLoop(()=>{
+ doors.forEach(s=>{s.cur+=(s.tgt-s.cur)*0.08;s.hinge.rotation.y=s.cur});
+ OC.update();R.render(S,cam);
+ labels.forEach(l=>{v.copy(l.pos).project(cam);const ok=v.z<1&&!l.hide;l.e.style.display=ok?'block':'none';
+  if(ok)l.e.style.transform=`translate(-50%,-50%) translate(${(v.x*.5+.5)*innerWidth}px,${(-v.y*.5+.5)*innerHeight}px)`});
+});
+</script></body></html>
