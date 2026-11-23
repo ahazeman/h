@@ -23,14 +23,14 @@ html,body{margin:0;height:100%;overflow:hidden;background:#15181c;font-family:sy
 <div id="tabs"></div>
 <div id="panel"><div id="ph"><span>⚙ Kawalan</span><span id="tg">–</span></div><div id="pb">
 <div id="doors"></div>
-<button id="all">Buka semua</button><button id="none">Tutup semua</button><hr style="border-color:#444">
+<button id="vw">Pandangan luar ruang</button><br><button id="all">Buka semua</button><button id="none">Tutup semua</button><hr style="border-color:#444">
 <label><input type="checkbox" id="tRoom" checked> Label saiz ruang</label>
 <label><input type="checkbox" id="tFur" checked> Label perabot</label>
 <label><input type="checkbox" id="tDoor" checked> Label pintu</label>
 <label><input type="checkbox" id="tLoc" checked> Penanda lokasi</label>
 <button id="ed">Edit JSON</button><button id="ap" style="display:none">Guna</button>
 <textarea id="js" spellcheck="false"></textarea>
-<small style="color:#999">Seret = putar · Roda = zum · Klik kanan = alih · Dwi-klik pintu = buka</small></div></div>
+<small style="color:#999">Seret = tinjau sekeliling · Roda = zum · Dwi-klik pintu = buka</small></div></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three';
@@ -42,20 +42,20 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 const LOC={"name":"Kampung Talang Dusun","lat":null,"lng":null};
 let ROOMS={
  "bilik":{"title":"Bilik","file":"roomstay.glb","rotDeg":11,"room":{"x0":-2.34,"x1":2.43,"z0":-1.74,"z1":2.23,"floorY":0.09,"ceilY":2.93},
-  "doors":[{"name":"Pintu Utama","x":-1.6,"z":2.23,"rotDeg":0,"w":0.9,"h":2.0,"openDeg":95},{"name":"Pintu Belakang","x":1.0,"z":-1.74,"rotDeg":180,"w":0.8,"h":2.0,"openDeg":95}],
+  "doors":[{"name":"Pintu Biru (timur)","x":2.43,"z":-0.1,"rotDeg":90,"w":0.8,"h":2.0,"openDeg":95},{"name":"Pintu Biru (barat)","x":-2.34,"z":-1.2,"rotDeg":-90,"w":0.8,"h":2.0,"openDeg":95}],
   "furniture":[{"name":"Katil (anggaran)","x":-1.14,"z":-0.34,"w":2.0,"d":1.5,"h":0.5},{"name":"Perabot 2 (anggaran)","x":1.0,"z":0.2,"w":1.2,"d":0.6,"h":0.8}]},
  "dapur":{"title":"Dapur","file":"dapur.glb","rotDeg":10.5,"room":{"x0":-1.07,"x1":0.98,"z0":-0.87,"z1":0.83,"floorY":0.1,"ceilY":2.5},
-  "doors":[{"name":"Pintu Dapur","x":-0.9,"z":0.83,"rotDeg":0,"w":0.8,"h":2.0,"openDeg":95}],
+  "doors":[{"name":"Pintu Dapur","x":-0.05,"z":0.83,"rotDeg":0,"w":0.9,"h":2.0,"openDeg":95}],
   "furniture":[{"name":"Kabinet/sinki (anggaran)","x":0.0,"z":-0.55,"w":1.9,"d":0.6,"h":0.9}]},
  "tandas":{"title":"Tandas","file":"tandas.glb","rotDeg":-23,"room":{"x0":-1.22,"x1":0.79,"z0":-0.74,"z1":0.57,"floorY":0.05,"ceilY":2.3},
-  "doors":[{"name":"Pintu Tandas","x":-0.8,"z":0.57,"rotDeg":0,"w":0.7,"h":2.0,"openDeg":95}],
+  "doors":[{"name":"Pintu Tandas","x":-0.55,"z":0.57,"rotDeg":0,"w":0.75,"h":2.0,"openDeg":95}],
   "furniture":[{"name":"Mangkuk tandas (anggaran)","x":0.45,"z":-0.4,"w":0.4,"d":0.7,"h":0.4}]}
 };
 let cur='bilik',doors=[],labels=[],model=null;const cache={};
 const $=id=>document.getElementById(id);
 const R=new THREE.WebGLRenderer({canvas:$('c'),antialias:true});R.setPixelRatio(devicePixelRatio);R.setSize(innerWidth,innerHeight);
 const S=new THREE.Scene();S.background=new THREE.Color(0x15181c);S.add(new THREE.AmbientLight(0xffffff,2.2));
-const cam=new THREE.PerspectiveCamera(60,innerWidth/innerHeight,.05,100);
+const cam=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.02,100);
 const OC=new OrbitControls(cam,$('c'));const ov=new THREE.Group();S.add(ov);
 const M=(c,o)=>new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:o,side:2});
 const rad=THREE.MathUtils.degToRad;
@@ -79,8 +79,14 @@ function build(){
   const st={d,hinge,cur:0,tgt:0};st.tog=()=>{st.tgt=st.tgt?0:rad(d.openDeg);sync()};p.userData.tog=st.tog;
   st.l=lab(`${d.name} ${d.w}×${d.h} m`,'door',[d.x+d.w/2*Math.cos(b),f+d.h+.15,d.z-d.w/2*Math.sin(b)],{t:'Buka',f:st.tog});doors.push(st)});
  lab(`📍 ${LOC.name}`+(LOC.lat!=null?` (${LOC.lat}, ${LOC.lng})`:''),'loc',[(r.x0+r.x1)/2,r.ceilY+.4,(r.z0+r.z1)/2]);
- const cx=(r.x0+r.x1)/2,cz=(r.z0+r.z1)/2,d=Math.max(L,W)*1.5+1;OC.target.set(cx,f+1.1,cz);cam.position.set(cx,f+d*.9,cz+d);OC.update();
+ setView(inside);
  sync();vis()}
+let inside=true;
+function setView(inn){inside=inn;const r=ROOMS[cur].room,f=r.floorY,cx=(r.x0+r.x1)/2,cz=(r.z0+r.z1)/2,L=r.x1-r.x0,W=r.z1-r.z0;
+ if(inn){const d=ROOMS[cur].doors[0],lx=d?d.x-cx:0,lz=d?d.z-cz:-1,n=Math.hypot(lx,lz)||1;
+  cam.position.set(cx-lx/n*.3,f+1.5,cz-lz/n*.3);OC.target.set(cam.position.x+lx/n*.02,f+1.5,cam.position.z+lz/n*.02);OC.minDistance=.01;OC.enablePan=false}
+ else{const d=Math.max(L,W)*1.5+1;OC.target.set(cx,f+1.1,cz);cam.position.set(cx,f+d*.9,cz+d);OC.minDistance=.3;OC.enablePan=true}
+ OC.update();$('vw').textContent=inn?'Pandangan luar ruang':'Pandangan dalam ruang'}
 function sync(){doors.forEach(s=>s.l.e.btn.textContent=s.tgt?'Tutup':'Buka');
  const el=$('doors');el.innerHTML='';doors.forEach(s=>{const b=document.createElement('button');b.textContent=`${s.tgt?'Tutup':'Buka'} ${s.d.name}`;b.onclick=s.tog;el.appendChild(b)})}
 function vis(){const on=i=>$(i).checked;labels.forEach(l=>l.hide=(l.cls.includes('room')&&!on('tRoom'))||(l.cls==='fur'&&!on('tFur'))||(l.cls==='door'&&!on('tDoor'))||(l.cls==='loc'&&!on('tLoc')))}
@@ -88,6 +94,7 @@ function vis(){const on=i=>$(i).checked;labels.forEach(l=>l.hide=(l.cls.includes
 $('all').onclick=()=>{doors.forEach(s=>s.tgt=rad(s.d.openDeg));sync()};$('none').onclick=()=>{doors.forEach(s=>s.tgt=0);sync()};
 $('ed').onclick=()=>{$('js').value=JSON.stringify(ROOMS[cur],null,1);$('js').style.display=$('ap').style.display='block'};
 $('ap').onclick=()=>{try{ROOMS[cur]=JSON.parse($('js').value);build()}catch(e){alert('JSON tidak sah: '+e.message)}};
+$('vw').onclick=()=>setView(!inside);
 $('ph').onclick=()=>{const m=$('panel').classList.toggle('min');$('tg').textContent=m?'+':'–'};
 
 const ray=new THREE.Raycaster(),mv=new THREE.Vector2();
